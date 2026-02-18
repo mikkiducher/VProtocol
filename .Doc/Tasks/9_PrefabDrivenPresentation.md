@@ -40,6 +40,9 @@
   - `RobotViewBindings` with `LaserMuzzle` support.
   - `EnemyViewBindings` with optional `HitPoint`.
   - `LaserViewPresenter` for prefab-driven emitter/body/impact composition.
+- Added enemy HP world label binding through `EnemyViewBindings`:
+  - `HpLabel` direct reference support,
+  - `HpLabelAnchor` fallback anchor support.
 - `MiniGameBootstrap` now supports `Laser View Prefab`.
 - Laser origin now uses robot muzzle when available.
 - Enemy targeting now uses enemy hit marker when available.
@@ -59,3 +62,11 @@
 5. Run scene and verify:
    - beam starts from `LaserMuzzle`,
    - beam ends at enemy `HitPoint`.
+
+## Handoff в основной проект (2026-02-18)
+- Статус в этом репозитории: `Pending` (после частичной реализации).
+- Решение: финализацию prefab-driven слоя выполнять в основном проекте с его целевой иерархией префабов.
+- Что переносим:
+  - уже реализованные binding-компоненты и fallback-логику,
+  - требования к marker points (`LaserMuzzle`, `HitPoint`),
+  - практические шаги Unity-проверки для host-сцены.

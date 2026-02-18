@@ -52,6 +52,9 @@ namespace VProtocol.MiniGame.Runtime.Core
             int fastStreak,
             int difficultyTier,
             float multiplier,
+            float comboTimeRemainingSeconds,
+            float comboWindowSeconds,
+            float comboReady01,
             int correctAnswers,
             int totalAnswers,
             float averageResponseSeconds)
@@ -62,6 +65,9 @@ namespace VProtocol.MiniGame.Runtime.Core
             FastStreak = fastStreak;
             DifficultyTier = difficultyTier;
             Multiplier = multiplier;
+            ComboTimeRemainingSeconds = comboTimeRemainingSeconds;
+            ComboWindowSeconds = comboWindowSeconds;
+            ComboReady01 = comboReady01;
             CorrectAnswers = correctAnswers;
             TotalAnswers = totalAnswers;
             AverageResponseSeconds = averageResponseSeconds;
@@ -73,6 +79,9 @@ namespace VProtocol.MiniGame.Runtime.Core
         public int FastStreak { get; }
         public int DifficultyTier { get; }
         public float Multiplier { get; }
+        public float ComboTimeRemainingSeconds { get; }
+        public float ComboWindowSeconds { get; }
+        public float ComboReady01 { get; }
         public int CorrectAnswers { get; }
         public int TotalAnswers { get; }
         public float AverageResponseSeconds { get; }

@@ -19,17 +19,20 @@ namespace VProtocol.MiniGame.Config.Waves
     {
         [SerializeField] private string enemyId = "SpamBot";
         [SerializeField] private int count = 1;
+        [SerializeField] private float startAfterSeconds = 0f;
         [SerializeField] private float intervalSeconds = 1f;
 
         public string EnemyId => enemyId;
         public int Count => count;
+        public float StartAfterSeconds => startAfterSeconds;
         public float IntervalSeconds => intervalSeconds;
 
-        public void Configure(string enemyTypeId, int spawnCount, float spawnIntervalSeconds)
+        public void Configure(string enemyTypeId, int spawnCount, float spawnIntervalSeconds, float spawnStartAfterSeconds = 0f)
         {
             enemyId = string.IsNullOrWhiteSpace(enemyTypeId) ? "SpamBot" : enemyTypeId;
             count = spawnCount < 0 ? 0 : spawnCount;
             intervalSeconds = spawnIntervalSeconds < 0f ? 0f : spawnIntervalSeconds;
+            startAfterSeconds = spawnStartAfterSeconds < 0f ? 0f : spawnStartAfterSeconds;
         }
     }
 }

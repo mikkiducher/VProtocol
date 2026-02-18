@@ -32,6 +32,9 @@
 - Enemy runtime now applies per-variant visuals and movement pattern, isolated inside `EnemySystem`.
 - Fallback wave now includes mixed composition (`SpamBot` + `BruteWorm`) to validate pressure variance without extra asset setup.
 - Wave composition remains config-driven via `WaveSpawnDescriptor` list.
+- Wave scheduler updated to support parallel spawn groups by `startAfterSeconds`:
+  - each descriptor can start independently from level start time,
+  - groups can overlap in time.
 
 ## Unity Verification Steps
 1. Open `Assets/Scenes/SampleScene.unity`, Play.
@@ -44,3 +47,11 @@
 4. (Optional) Create custom `EnemyArchetypeConfig` assets and assign into `LevelConfig`:
    - set `Variant` and verify runtime uses it without code changes.
 5. Ensure win still triggers only after wave completion and enemy cleanup.
+
+## Wave Config Tips
+- `enemyId` must match `EnemyArchetypeConfig.Id` (case-insensitive).
+- Use `startAfterSeconds` for overlapping groups.
+  Example:
+  - `BruteWorm`, `count=3`, `interval=10`, `startAfterSeconds=0`
+  - `SpamBot`, `count=12`, `interval=1`, `startAfterSeconds=2`
+  Result: Brute starts immediately, Spam starts at 2s in parallel.

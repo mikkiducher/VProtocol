@@ -12,7 +12,7 @@ namespace VProtocol.MiniGame.Runtime.Contracts
         void ShowCorrectFeedback(int correctAnswer);
         void ShowWrongFeedback(int correctAnswer);
         void SetGameState(GameState state, int barrierLayers);
-        void SetCombatTelemetry(int comboStreak, int fastStreak, int difficultyTier, float multiplier, float avgResponseSeconds, float accuracy);
+        void SetCombatTelemetry(int comboStreak, int fastStreak, int difficultyTier, float multiplier, float comboReady01, float avgResponseSeconds, float accuracy);
         void ToggleOverlay();
         void Reset();
     }

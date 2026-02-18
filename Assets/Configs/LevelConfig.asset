@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79b3d45c61d0c304592dc5795d1ac499, type: 3}
+  m_Name: LevelConfig
+  m_EditorClassIdentifier: Assembly-CSharp::VProtocol.MiniGame.Config.Levels.LevelConfig
+  barrierLayers: 3
+  mathConfig: {fileID: 11400000, guid: dbb5f8567a1f5e440ab5da158ab5169a, type: 2}
+  waveConfig: {fileID: 11400000, guid: 2f3433f9307ead04a996593720895b7d, type: 2}
+  enemyArchetypes:
+  - {fileID: 11400000, guid: 97fd6802306daa544b0c3d4062943996, type: 2}
+  - {fileID: 11400000, guid: 4d349c017e3080440bc42c4475840627, type: 2}
+  combat:
+    fastAnswerThresholdSeconds: 4
+    comboWindowSeconds: 4.5
+  robotVisual:
+    robotPrefab: {fileID: 8921478200181440842, guid: 798becaa65b27e04e894b16cda74cc79, type: 3}
+    idleSprite: {fileID: 0}
+    shootSprite: {fileID: 0}
+    hitSprite: {fileID: 0}
+    breakSprite: {fileID: 0}
+    animatorController: {fileID: 0}
+    scale: {x: 1, y: 1, z: 1}

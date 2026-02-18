@@ -8,10 +8,25 @@ namespace VProtocol.MiniGame.Runtime.WaveSystem
 {
     public sealed class WaveSystemService : IWaveSystem
     {
-        private readonly List<WaveSpawnDescriptor> _spawnPlan = new();
-        private int _descriptorIndex;
-        private int _remainingInDescriptor;
-        private float _spawnCooldown;
+        private sealed class SpawnRuntime
+        {
+            public SpawnRuntime(WaveSpawnDescriptor descriptor)
+            {
+                Descriptor = descriptor;
+                Remaining = Math.Max(0, descriptor.Count);
+                StartAfterSeconds = Math.Max(0f, descriptor.StartAfterSeconds);
+                Cooldown = 0f;
+            }
+
+            public WaveSpawnDescriptor Descriptor { get; }
+            public int Remaining { get; set; }
+            public float StartAfterSeconds { get; set; }
+            public float Cooldown { get; set; }
+            public bool IsStarted => StartAfterSeconds <= 0f;
+            public bool IsCompleted => Remaining <= 0;
+        }
+
+        private readonly List<SpawnRuntime> _spawnPlan = new();
         private bool _isRunning;
 
         public bool IsCompleted { get; private set; }
@@ -23,38 +38,36 @@ namespace VProtocol.MiniGame.Runtime.WaveSystem
         {
             _spawnPlan.Clear();
             IsCompleted = false;
-            _descriptorIndex = 0;
-            _remainingInDescriptor = 0;
-            _spawnCooldown = 0f;
             _isRunning = false;
 
             if (levelConfig == null || levelConfig.WaveConfig == null)
             {
                 var spamFallback = new WaveSpawnDescriptor();
-                spamFallback.Configure("SpamBot", 10, 0.75f);
-                _spawnPlan.Add(spamFallback);
+                spamFallback.Configure("SpamBot", 10, 0.75f, 0f);
+                _spawnPlan.Add(new SpawnRuntime(spamFallback));
 
                 var bruteFallback = new WaveSpawnDescriptor();
-                bruteFallback.Configure("BruteWorm", 3, 1.2f);
-                _spawnPlan.Add(bruteFallback);
+                bruteFallback.Configure("BruteWorm", 3, 1.2f, 2f);
+                _spawnPlan.Add(new SpawnRuntime(bruteFallback));
                 return;
             }
 
-            _spawnPlan.AddRange(levelConfig.WaveConfig.Spawns);
+            foreach (var descriptor in levelConfig.WaveConfig.Spawns)
+            {
+                if (descriptor == null || descriptor.Count <= 0)
+                {
+                    continue;
+                }
+
+                _spawnPlan.Add(new SpawnRuntime(descriptor));
+            }
         }
 
         public void StartWaves()
         {
             _isRunning = true;
             IsCompleted = _spawnPlan.Count == 0;
-
-            if (_spawnPlan.Count > 0)
-            {
-                _descriptorIndex = 0;
-                _remainingInDescriptor = Math.Max(0, _spawnPlan[0].Count);
-                _spawnCooldown = 0f;
-            }
-            else
+            if (IsCompleted)
             {
                 WaveCompleted?.Invoke();
             }
@@ -67,51 +80,51 @@ namespace VProtocol.MiniGame.Runtime.WaveSystem
                 return;
             }
 
-            if (_descriptorIndex >= _spawnPlan.Count)
+            if (_spawnPlan.Count == 0)
             {
                 CompleteWave();
                 return;
             }
 
-            if (_remainingInDescriptor <= 0)
+            var hasAnyPending = false;
+            for (var i = 0; i < _spawnPlan.Count; i++)
             {
-                AdvanceDescriptor();
-                return;
+                var runtime = _spawnPlan[i];
+                if (runtime.IsCompleted)
+                {
+                    continue;
+                }
+
+                hasAnyPending = true;
+
+                if (!runtime.IsStarted)
+                {
+                    runtime.StartAfterSeconds -= deltaTime;
+                    continue;
+                }
+
+                runtime.Cooldown -= deltaTime;
+                if (runtime.Cooldown > 0f)
+                {
+                    continue;
+                }
+
+                SpawnRequested?.Invoke(runtime.Descriptor);
+                runtime.Remaining--;
+                runtime.Cooldown = Math.Max(0.05f, runtime.Descriptor.IntervalSeconds);
             }
 
-            _spawnCooldown -= deltaTime;
-            if (_spawnCooldown > 0f)
+            if (!hasAnyPending)
             {
-                return;
+                CompleteWave();
             }
-
-            var descriptor = _spawnPlan[_descriptorIndex];
-            SpawnRequested?.Invoke(descriptor);
-            _remainingInDescriptor--;
-            _spawnCooldown = Math.Max(0.05f, descriptor.IntervalSeconds);
         }
 
         public void Reset()
         {
             IsCompleted = false;
             _isRunning = false;
-            _descriptorIndex = 0;
-            _remainingInDescriptor = 0;
-            _spawnCooldown = 0f;
-        }
-
-        private void AdvanceDescriptor()
-        {
-            _descriptorIndex++;
-            if (_descriptorIndex >= _spawnPlan.Count)
-            {
-                CompleteWave();
-                return;
-            }
-
-            var next = _spawnPlan[_descriptorIndex];
-            _remainingInDescriptor = Math.Max(0, next.Count);
-            _spawnCooldown = 0f;
+            _spawnPlan.Clear();
         }
 
         private void CompleteWave()

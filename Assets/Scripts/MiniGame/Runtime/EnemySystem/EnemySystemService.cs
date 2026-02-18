@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using TMPro;
 using UnityEngine;
 using VProtocol.MiniGame.Config.Enemies;
 using VProtocol.MiniGame.Runtime.Contracts;
@@ -19,6 +20,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
                 float baseY,
                 Vector3 visualOffset,
                 EnemyViewBindings viewBindings,
+                TextMeshPro hpLabel,
                 GameObject gameObject)
             {
                 Id = id;
@@ -29,6 +31,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
                 BaseY = baseY;
                 VisualOffset = visualOffset;
                 ViewBindings = viewBindings;
+                HpLabel = hpLabel;
                 GameObject = gameObject;
             }
 
@@ -40,10 +43,11 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
             public float BaseY { get; }
             public Vector3 VisualOffset { get; }
             public EnemyViewBindings ViewBindings { get; }
+            public TextMeshPro HpLabel { get; }
             public GameObject GameObject { get; }
         }
 
-        private readonly Dictionary<string, EnemyArchetypeConfig> _archetypesById = new();
+        private readonly Dictionary<string, EnemyArchetypeConfig> _archetypesById = new(System.StringComparer.OrdinalIgnoreCase);
         private readonly List<EnemyRuntime> _activeEnemies = new();
         private Transform _parent;
         private Vector3 _spawnPosition;
@@ -65,12 +69,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
 
             if (enemyArchetypes == null)
             {
-                var fallback = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
-                fallback.Configure("SpamBot", EnemyVariant.SpamBot, 8, 2.1f);
-                _archetypesById[fallback.Id] = fallback;
-                var bruteFallback = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
-                bruteFallback.Configure("BruteWorm", EnemyVariant.BruteWorm, 20, 1.2f);
-                _archetypesById[bruteFallback.Id] = bruteFallback;
+                EnsureBuiltinArchetypes();
                 return;
             }
 
@@ -86,19 +85,18 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
 
             if (_archetypesById.Count == 0)
             {
-                var fallback = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
-                fallback.Configure("SpamBot", EnemyVariant.SpamBot, 8, 2.1f);
-                _archetypesById[fallback.Id] = fallback;
-                var bruteFallback = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
-                bruteFallback.Configure("BruteWorm", EnemyVariant.BruteWorm, 20, 1.2f);
-                _archetypesById[bruteFallback.Id] = bruteFallback;
+                EnsureBuiltinArchetypes();
+                return;
             }
+
+            EnsureBuiltinArchetypes();
         }
 
         public void Spawn(string enemyId)
         {
             if (!_archetypesById.TryGetValue(enemyId, out var archetype))
             {
+                Debug.LogWarning($"EnemySystem: unknown enemyId '{enemyId}'. Fallback archetype will be used.");
                 if (!_archetypesById.TryGetValue("SpamBot", out archetype))
                 {
                     archetype = _archetypesById.Values.First();
@@ -112,6 +110,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
                 _spawnPosition.y + Random.Range(-_spawnYJitter, _spawnYJitter),
                 _spawnPosition.z);
             enemyObject = SetupVisual(enemyObject, archetype, spawnPoint, out var viewBindings);
+            var hpLabel = ResolveHpLabel(viewBindings, enemyObject.transform, archetype.MaxHp);
 
             _activeEnemies.Add(
                 new EnemyRuntime(
@@ -123,6 +122,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
                     spawnPoint.y,
                     archetype.VisualOffset,
                     viewBindings,
+                    hpLabel,
                     enemyObject));
         }
 
@@ -165,6 +165,7 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
 
             var frontEnemy = _activeEnemies.OrderBy(enemy => enemy.GameObject.transform.position.x).First();
             frontEnemy.Hp -= damage;
+            UpdateHpLabel(frontEnemy);
             if (frontEnemy.Hp <= 0)
             {
                 Object.Destroy(frontEnemy.GameObject);
@@ -283,6 +284,45 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
             return enemyObject;
         }
 
+        private static TextMeshPro ResolveHpLabel(EnemyViewBindings viewBindings, Transform parent, int hp)
+        {
+            if (viewBindings != null && viewBindings.HpLabel != null)
+            {
+                viewBindings.HpLabel.text = hp.ToString();
+                return viewBindings.HpLabel;
+            }
+
+            var labelParent = viewBindings != null ? viewBindings.HpLabelAnchor : parent;
+            return CreateHpLabel(labelParent, hp);
+        }
+
+        private static TextMeshPro CreateHpLabel(Transform parent, int hp)
+        {
+            var labelObject = new GameObject("HpLabel");
+            labelObject.transform.SetParent(parent, false);
+            labelObject.transform.localPosition = Vector3.zero;
+
+            var label = labelObject.AddComponent<TextMeshPro>();
+            label.text = hp.ToString();
+            label.fontSize = 4f;
+            label.alignment = TextAlignmentOptions.Center;
+            label.color = Color.white;
+            label.outlineColor = Color.black;
+            label.outlineWidth = 0.2f;
+
+            return label;
+        }
+
+        private static void UpdateHpLabel(EnemyRuntime enemy)
+        {
+            if (enemy.HpLabel == null)
+            {
+                return;
+            }
+
+            enemy.HpLabel.text = enemy.Hp > 0 ? enemy.Hp.ToString() : "0";
+        }
+
         private static Color ResolveColor(EnemyVariant variant)
         {
             return variant switch
@@ -292,15 +332,23 @@ namespace VProtocol.MiniGame.Runtime.EnemySystem
                 _ => new Color(0.2f, 0.95f, 0.95f, 1f)
             };
         }
-    }
 
-    public sealed class EnemyViewBindings : MonoBehaviour
-    {
-        [SerializeField] private Transform hitPoint;
-
-        public Vector3 GetHitPointPosition()
+        private void EnsureBuiltinArchetypes()
         {
-            return hitPoint != null ? hitPoint.position : transform.position;
+            if (!_archetypesById.ContainsKey("SpamBot"))
+            {
+                var spam = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
+                spam.Configure("SpamBot", EnemyVariant.SpamBot, 8, 2.1f);
+                _archetypesById[spam.Id] = spam;
+            }
+
+            if (!_archetypesById.ContainsKey("BruteWorm"))
+            {
+                var brute = ScriptableObject.CreateInstance<EnemyArchetypeConfig>();
+                brute.Configure("BruteWorm", EnemyVariant.BruteWorm, 20, 1.2f);
+                _archetypesById[brute.Id] = brute;
+            }
         }
     }
+
 }

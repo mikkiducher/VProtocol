@@ -13,6 +13,16 @@ namespace VProtocol.MiniGame.Config.Levels
     public sealed class LevelConfig : ScriptableObject
     {
         [System.Serializable]
+        public sealed class CombatSettings
+        {
+            [SerializeField] private float fastAnswerThresholdSeconds = 2f;
+            [SerializeField] private float comboWindowSeconds = 2.5f;
+
+            public float FastAnswerThresholdSeconds => fastAnswerThresholdSeconds;
+            public float ComboWindowSeconds => comboWindowSeconds;
+        }
+
+        [System.Serializable]
         public sealed class RobotVisualProfile
         {
             [SerializeField] private GameObject robotPrefab;
@@ -36,12 +46,14 @@ namespace VProtocol.MiniGame.Config.Levels
         [SerializeField] private MathConfig mathConfig;
         [SerializeField] private WaveConfig waveConfig;
         [SerializeField] private List<EnemyArchetypeConfig> enemyArchetypes = new();
+        [SerializeField] private CombatSettings combat = new();
         [SerializeField] private RobotVisualProfile robotVisual = new();
 
         public int BarrierLayers => barrierLayers;
         public MathConfig MathConfig => mathConfig;
         public WaveConfig WaveConfig => waveConfig;
         public IReadOnlyList<EnemyArchetypeConfig> EnemyArchetypes => enemyArchetypes;
+        public CombatSettings Combat => combat;
         public RobotVisualProfile RobotVisual => robotVisual;
 
         public void Configure(

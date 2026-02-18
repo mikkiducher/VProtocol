@@ -70,6 +70,14 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
                 LastMultiplier = 1f;
             }
 
+            public void ApplyComboTimeout()
+            {
+                FastStreak = 0;
+                ComboStreak = 0;
+                DifficultyTier = 0;
+                LastMultiplier = 1f;
+            }
+
             public float GetAverageResponseSeconds()
             {
                 return AnswersCorrect > 0 ? ResponseTotalSeconds / AnswersCorrect : 0f;
@@ -138,9 +146,10 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
         private LevelConfig.RobotVisualProfile _robotVisualProfile;
         private bool _waveFinished;
         private bool _sessionStarted;
+        private float _fastAnswerThresholdSeconds = 2f;
+        private float _comboWindowSeconds = 2.5f;
+        private float _comboTimeRemainingSeconds;
         private readonly SessionTelemetry _telemetry = new();
-
-        private const float FastAnswerThresholdSeconds = 2f;
 
         public event Action<MiniGameResult> GameCompleted;
         public event Action<MiniGameRuntimeStats> RuntimeStatsUpdated;
@@ -165,6 +174,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
 
             _waveSystem.Tick(Time.deltaTime);
             _enemySystem.Tick(Time.deltaTime);
+            TickComboWindow(Time.deltaTime);
 
             if (_waveFinished && _enemySystem.AliveCount == 0)
             {
@@ -256,6 +266,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
             var barrierLayers = config != null ? config.BarrierLayers : 3;
             var mathConfig = config != null ? config.MathConfig : null;
             var enemyArchetypes = config != null ? config.EnemyArchetypes : null;
+            var combatSettings = config != null ? config.Combat : null;
 
             _barrierSystem.Initialize(barrierLayers);
             _mathSystem.Initialize(mathConfig);
@@ -268,6 +279,13 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
 
             _waveFinished = false;
             _telemetry.Reset();
+            _fastAnswerThresholdSeconds = combatSettings != null
+                ? Mathf.Max(0.1f, combatSettings.FastAnswerThresholdSeconds)
+                : 2f;
+            _comboWindowSeconds = combatSettings != null
+                ? Mathf.Max(0.25f, combatSettings.ComboWindowSeconds)
+                : 2.5f;
+            _comboTimeRemainingSeconds = 0f;
         }
 
         private void BindSystems()
@@ -289,6 +307,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
             _uiSystem.Reset();
             _waveFinished = false;
             _sessionStarted = false;
+            _comboTimeRemainingSeconds = 0f;
         }
 
         private void OnDestroy()
@@ -339,7 +358,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
             if (_mathSystem.IsCorrect(_currentRound, answer))
             {
                 var responseSeconds = Time.time - _roundStartedAt;
-                var preview = _telemetry.BuildCorrectPreview(responseSeconds, FastAnswerThresholdSeconds);
+                var preview = _telemetry.BuildCorrectPreview(responseSeconds, _fastAnswerThresholdSeconds);
                 var damageResult = _combatSystem.ComputeDamage(
                     _currentRound.Question,
                     answer,
@@ -357,6 +376,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
                 _uiSystem.ShowCorrectFeedback(_currentRound.Question.CorrectAnswer);
 
                 _telemetry.ApplyCorrect(responseSeconds, damageResult.Multiplier, preview);
+                _comboTimeRemainingSeconds = preview.ComboStreak > 0 ? _comboWindowSeconds : 0f;
                 Debug.Log(
                     $"Combat: correct, response={responseSeconds:0.00}s, combo={preview.ComboStreak}, tier={preview.DifficultyTier}, x{damageResult.Multiplier:0.00}, dmg={damageResult.Damage}, floor={damageResult.ComplexityFloorDamage}");
             }
@@ -365,6 +385,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
                 _uiSystem.ShowWrongFeedback(_currentRound.Question.CorrectAnswer);
                 var hasLayersLeft = _barrierSystem.ConsumeLayer();
                 _telemetry.ApplyWrong();
+                _comboTimeRemainingSeconds = 0f;
                 Debug.Log("Combat: wrong answer, combo reset.");
                 if (!hasLayersLeft)
                 {
@@ -411,6 +432,7 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
                 stats.FastStreak,
                 stats.DifficultyTier,
                 stats.Multiplier,
+                stats.ComboReady01,
                 stats.AverageResponseSeconds,
                 stats.Accuracy);
             RuntimeStatsUpdated?.Invoke(stats);
@@ -451,9 +473,28 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
                 _telemetry.FastStreak,
                 _telemetry.DifficultyTier,
                 _telemetry.LastMultiplier,
+                _comboTimeRemainingSeconds,
+                _comboWindowSeconds,
+                _comboWindowSeconds > 0f ? _comboTimeRemainingSeconds / _comboWindowSeconds : 0f,
                 _telemetry.AnswersCorrect,
                 _telemetry.AnswersTotal,
                 _telemetry.GetAverageResponseSeconds());
+        }
+
+        private void TickComboWindow(float deltaTime)
+        {
+            if (_telemetry.ComboStreak <= 0 || _comboTimeRemainingSeconds <= 0f)
+            {
+                return;
+            }
+
+            _comboTimeRemainingSeconds = Mathf.Max(0f, _comboTimeRemainingSeconds - deltaTime);
+            if (_comboTimeRemainingSeconds <= 0f)
+            {
+                _telemetry.ApplyComboTimeout();
+                Debug.Log("Combat: combo timeout, streak reset.");
+                SyncUiState();
+            }
         }
 
         private void ApplyRobotVisualProfile(LevelConfig.RobotVisualProfile profile)
@@ -661,66 +702,4 @@ namespace VProtocol.MiniGame.Runtime.Bootstrap
         }
     }
 
-    public sealed class RobotViewBindings : MonoBehaviour
-    {
-        [SerializeField] private Transform laserMuzzle;
-
-        public Vector3 GetLaserMuzzlePosition()
-        {
-            return laserMuzzle != null ? laserMuzzle.position : transform.position;
-        }
-    }
-
-    public sealed class LaserViewPresenter : MonoBehaviour
-    {
-        [SerializeField] private SpriteRenderer emitterRenderer;
-        [SerializeField] private SpriteRenderer bodyRenderer;
-        [SerializeField] private SpriteRenderer impactRenderer;
-
-        public void Configure(Vector3 from, Vector3 to, float thickness, Sprite bodySprite, Sprite emitterSprite, Sprite impactSprite)
-        {
-            EnsureRenderers();
-
-            var direction = to - from;
-            var distance = direction.magnitude;
-            var angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-
-            var bodyTransform = bodyRenderer.transform;
-            bodyTransform.position = (from + to) * 0.5f;
-            bodyTransform.rotation = Quaternion.Euler(0f, 0f, angle);
-            bodyRenderer.sprite = bodySprite != null ? bodySprite : emitterSprite;
-            bodyRenderer.drawMode = SpriteDrawMode.Sliced;
-            bodyRenderer.size = new Vector2(distance, Mathf.Max(0.05f, thickness));
-
-            emitterRenderer.transform.position = from;
-            emitterRenderer.sprite = emitterSprite != null ? emitterSprite : bodySprite;
-
-            impactRenderer.transform.position = to;
-            impactRenderer.sprite = impactSprite != null ? impactSprite : bodySprite;
-        }
-
-        private void EnsureRenderers()
-        {
-            if (bodyRenderer == null)
-            {
-                var body = new GameObject("Body");
-                body.transform.SetParent(transform, false);
-                bodyRenderer = body.AddComponent<SpriteRenderer>();
-            }
-
-            if (emitterRenderer == null)
-            {
-                var emitter = new GameObject("Emitter");
-                emitter.transform.SetParent(transform, false);
-                emitterRenderer = emitter.AddComponent<SpriteRenderer>();
-            }
-
-            if (impactRenderer == null)
-            {
-                var impact = new GameObject("Impact");
-                impact.transform.SetParent(transform, false);
-                impactRenderer = impact.AddComponent<SpriteRenderer>();
-            }
-        }
-    }
 }
